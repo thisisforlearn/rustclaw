@@ -1,12 +1,12 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use chess_engine_rust::nnue::Network;
-use chess_engine_rust::trainer::{TrainConfig, train};
+use rustclaw::nnue::Network;
+use rustclaw::trainer::{TrainConfig, train};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name="crabchess-trainer", about="Train CrabChess NNUE from scratch - pure Rust")]
+#[command(name="rustclaw-trainer", about="Train RustClaw NNUE from scratch - pure Rust by Vaibhav | GPL-2.0 + commercial")]
 struct Cli {
     /// Path to training data JSONL (processed Lichess evals). If not provided, uses synthetic.
     #[arg(long)]
@@ -24,7 +24,7 @@ struct Cli {
     #[arg(long, default_value="0.0001")]
     weight_decay: f32,
 
-    #[arg(long, default_value="crabchess.nnue")]
+    #[arg(long, default_value="rustclaw.nnue")]
     output: String,
 
     #[arg(long, default_value="200000")]

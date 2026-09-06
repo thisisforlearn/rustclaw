@@ -2,7 +2,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::Parser;
-use chess_engine_rust::data::{TrainingPosition, dataset_info};
+use rustclaw::data::{TrainingPosition, dataset_info};
 use cozy_chess::Board;
 use std::str::FromStr;
 use std::fs::File;
