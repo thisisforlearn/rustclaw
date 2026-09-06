@@ -6,7 +6,7 @@ use rustclaw::trainer::{TrainConfig, train};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name="rustclaw-trainer", about="Train RustClaw NNUE from scratch - pure Rust by Vaibhav | GPL-2.0 + commercial")]
+#[command(name="rustclaw-trainer", about="Train RustClaw NNUE from scratch - pure Rust by Vaibhav | GPL-3.0 + commercial")]
 struct Cli {
     /// Path to training data JSONL (processed Lichess evals). If not provided, uses synthetic.
     #[arg(long)]

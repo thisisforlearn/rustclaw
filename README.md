@@ -1,6 +1,6 @@
 # 🦀 RustClaw — Ultra-optimized Pure Rust NNUE Chess Engine
 
-**by Vaibhav • GPL-2.0 + commercial • HalfKP 40960→256×2→32→32→1 • AVX2 • 155k evals/s • Lichess-style Web • CLI for Linux / Windows / macOS / Android**
+**by Vaibhav • GPL-3.0 + commercial • HalfKP 40960→256×2→32→32→1 • AVX2 • 155k evals/s • Lichess-style Web • CLI for Linux / Windows / macOS / Android**
 
 > Pure Rust from scratch — **not a Stockfish finetune**. NNUE quantized `i16/i8` `QA=255 QB=64` `SCReLU`, efficiently updatable, `AdamW` in Rust, streaming Lichess Cloud `depth 30-40` `99%+` `<10GB`, `rayon 12T` `mimalloc`, `Lazy SMP` search + book.
 
@@ -97,11 +97,11 @@ Data: streaming zstd -T0 head -n 5M | shuf → 1.2GB + augmentation 3× =4.2h tr
 
 ---
 
-## 📜 License — GPL-2.0 + commercial by Vaibhav
+## 📜 License — GPL-3.0 + commercial by Vaibhav
 
-**GPL-2.0-only** for open source — see `LICENSE`.
+**GPL-3.0-only** for open source — see `LICENSE`.
 
-**Companies can buy commercial licenses (no GPL-2.0 source distribution):**
+**Companies can buy commercial licenses (no GPL-3.0 source distribution):**
 - Contact **Vaibhav** via `vaibhav@rustclaw.dev` or `https://github.com/thisisforlearn/rustclaw/issues`
 - Flat-fee royalty-free for small companies available.
 

@@ -14,7 +14,7 @@ pub async fn run_server(network: Arc<Mutex<Network>>, port: u16) -> anyhow::Resu
         .fallback(get(index))
         .with_state(network);
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
-    println!("🦀 RustClaw Web UI (lichess-like) by Vaibhav — GPL-2.0 + commercial - running at http://localhost:{}/", port);
+    println!("🦀 RustClaw Web UI (lichess-like) by Vaibhav — GPL-3.0 + commercial - running at http://localhost:{}/", port);
     println!("   Open this URL in your browser - it looks like lichess, dark theme, but powered by YOUR Rust NNUE");
     axum::serve(listener, app).await?;
     Ok(())
@@ -75,7 +75,7 @@ const INDEX_HTML: &str = r##"<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RustClaw • by Vaibhav — GPL-2.0 + commercial</title>
+<title>RustClaw • by Vaibhav — GPL-3.0 + commercial</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#161512;--panel:#2b2a29;--panel2:#262421;--line:#3a3938;--light:#f0d9b5;--dark:#b58863;--accent:#769656;--accent2:#4a642d;--text:#bababa;--text2:#888;--sel:#ffcc0055;--last:#fff98066;--hint:#00000022}
@@ -124,7 +124,7 @@ const INDEX_HTML: &str = r##"<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <div class="logo"><i>🦀</i><span>rust</span>claw <span style="font-size:11px;font-weight:600;color:#999;margin-left:6px">by Vaibhav • GPL-2.0 + commercial</span></div>
+  <div class="logo"><i>🦀</i><span>rust</span>claw <span style="font-size:11px;font-weight:600;color:#999;margin-left:6px">by Vaibhav • GPL-3.0 + commercial</span></div>
   <nav><a class="active" href="#">PLAY</a><a href="#">PUZZLES</a><a href="#">LEARN</a><a href="#">WATCH</a><a href="#">COMMUNITY</a><a href="#">TOOLS</a></nav>
   <div class="right"><span class="badge">RUSTCLAW • 256×2→32→32→1 • AVX2 • 155k nps</span></div>
 </header>

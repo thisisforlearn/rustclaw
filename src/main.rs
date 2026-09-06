@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Parser)]
-#[command(name="rustclaw", author="Vaibhav", version="1.0.0", about="RustClaw - Ultra-optimized Pure Rust NNUE Chess Engine by Vaibhav | GPL-2.0 + commercial")]
+#[command(name="rustclaw", author="Vaibhav", version="1.0.0", about="RustClaw - Ultra-optimized Pure Rust NNUE Chess Engine by Vaibhav | GPL-3.0 + commercial")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -107,7 +107,7 @@ async fn run_uci(mut network: nnue::Network) -> anyhow::Result<()> {
     use std::io::{self, BufRead};
     let mut board = Board::default();
     network.refresh(&board);
-    println!("RustClaw 1.0 - Pure Rust NNUE (HalfKP 40960->256x2->32->32->1, AVX2, quantized) by Vaibhav | GPL-2.0 + commercial");
+    println!("RustClaw 1.0 - Pure Rust NNUE (HalfKP 40960->256x2->32->32->1, AVX2, quantized) by Vaibhav | GPL-3.0 + commercial");
     println!("id name RustClaw");
     println!("id author Vaibhav");
     println!("uciok");
