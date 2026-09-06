@@ -1,0 +1,7 @@
+/target/
+data/*.zst
+data/*.jsonl
+data/lichess_db_eval.jsonl
+data/ultra_train.jsonl
+*.epoch*
+/tmp/
