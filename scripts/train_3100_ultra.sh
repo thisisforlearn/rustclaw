@@ -37,7 +37,7 @@ else
   if [ ! -f "$ULTRA_DATA" ]; then
     echo "🔧 Building ultra filtered dataset (99%+ accuracy, dedup, <10GB) ..."
     # Keep only best 5M, shuffle, ensure <2GB
-    head -n 5000000 "$DATA" | shuf --random-seed=42 > "$ULTRA_DATA"
+    head -n 5000000 "$DATA" | shuf > "$ULTRA_DATA"
     echo "   Ultra data: $(wc -l < $ULTRA_DATA) positions, $(du -h $ULTRA_DATA | cut -f1)"
   fi
   DATA="$ULTRA_DATA"
