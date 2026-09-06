@@ -2,6 +2,7 @@ use axum::{Router, routing::get, response::Html, extract::ws::{WebSocketUpgrade,
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::nnue::Network;
+use crate::engine;
 use cozy_chess::Board;
 use std::str::FromStr;
 
@@ -49,7 +50,20 @@ async fn handle_ws(mut socket: WebSocket, net: Arc<Mutex<Network>>) {
                         }
                     },
                     "reset" => { board = Board::default(); let _ = socket.send(Message::Text(serde_json::json!({ "type": "update", "fen": format!("{}", board), "eval": 0 }).to_string().into())).await; },
-                    "eval" => { let eval = { let n = net.lock().await; n.evaluate(&board) }; let _ = socket.send(Message::Text(serde_json::json!({"type":"eval","eval":eval}).to_string().into())).await; }
+                    "eval" => { let eval = { let n = net.lock().await; n.evaluate(&board) }; let _ = socket.send(Message::Text(serde_json::json!({"type":"eval","eval":eval}).to_string().into())).await; },
+                    "ai_move" => {
+                        let depth = v.get("depth").and_then(|x| x.as_u64()).unwrap_or(10) as u8;
+                        let net_clone = { net.lock().await.clone() };
+                        let res = engine::search::search(&board, &net_clone, engine::search::SearchParams { depth, threads: 12, ..Default::default() });
+                        if let Some(mv)=res.best_move{ let mv_str=mv.to_string(); board.play_unchecked(mv); let eval={let n=net.lock().await; n.evaluate(&board)}; let fen=format!("{}", board); let _=socket.send(Message::Text(serde_json::json!({"type":"ai","fen":fen,"eval":eval,"ai":mv_str,"score":res.score,"nodes":res.nodes}).to_string().into())).await; }
+                    },
+                    "hint" => {
+                        let depth = v.get("depth").and_then(|x| x.as_u64()).unwrap_or(10) as u8;
+                        let net_clone = { net.lock().await.clone() };
+                        let res = engine::search::search(&board, &net_clone, engine::search::SearchParams { depth, threads: 12, ..Default::default() });
+                        let best = res.best_move.map(|m| m.to_string()).unwrap_or("".to_string());
+                        let _=socket.send(Message::Text(serde_json::json!({"type":"hint","best":best,"score":res.score,"pv": res.pv.iter().map(|m| m.to_string()).collect::<Vec<_>>(),"nodes":res.nodes}).to_string().into())).await;
+                    },
                     _ => {}
                 }
             }
@@ -124,16 +138,24 @@ const INDEX_HTML: &str = r##"<!DOCTYPE html>
       <div style="margin-top:10px;display:flex;gap:7px;align-items:center;flex-wrap:wrap"><span class="badge" id="turnBadge" style="background:#404040">White to move</span><span id="fenShort" style="font-size:11px;color:var(--text2);font-family:ui-monospace,monospace">startpos</span></div>
       <input id="fenInput" class="fen" placeholder="Paste FEN — Enter" spellcheck="false" />
       <div style="margin-top:8px;font-size:11px;color:var(--text2)">UCI: <code>rustclaw --nnue rustclaw.nnue</code> • CLI: <code>rustclaw web --port 3000</code></div>
+      <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>Depth</span><span id="depthVal">10</span></div><input type="range" id="depthRange" min="6" max="18" value="10" style="width:100%;accent-color:var(--accent)">
+      <canvas id="evalGraph" width="240" height="60" style="width:100%;height:60px;background:#1e1e1e;border:1px solid var(--line);border-radius:3px;margin-top:8px"></canvas>
+      <div style="margin-top:6px;display:flex;gap:6px"><select id="modeSel" style="flex:1;background:#383734;color:#ccc;border:1px solid var(--line);padding:6px;border-radius:3px;font-size:11px"><option value="ai">Play vs RustClaw AI</option><option value="analysis">Analysis</option><option value="puzzle">Puzzle</option></select><label style="display:flex;align-items:center;gap:4px;font-size:11px"><input type="checkbox" id="autoAI" checked> Auto AI</label></div>
     </div>
-    <h3>Game</h3>
+    <h3>Game <span style="color:var(--accent);cursor:pointer;font-size:10px" onclick="flipBoard()">flip</span></h3>
     <div class="controls">
-      <button class="fbt primary" onclick="resetBoard()">↺ New game</button>
+      <button class="fbt primary" onclick="resetBoard()">↺ New</button>
       <button class="fbt" onclick="undoMove()">↩ Undo</button>
+      <button class="fbt" onclick="redoMove()">↪ Redo</button>
       <button class="fbt" onclick="flipBoard()">⇅ Flip</button>
+      <button class="fbt" onclick="aiMove()">🤖 AI</button>
+      <button class="fbt" onclick="hintMove()">💡 Hint</button>
       <button class="fbt" onclick="requestEval()">🧠 Eval</button>
     </div>
-    <div id="moveList" style="padding:8px 12px;max-height:220px;overflow:auto;border-top:1px solid var(--line)"></div>
-    <div style="padding:8px 12px;border-top:1px solid var(--line);font-size:11px;color:var(--text2)">Click a piece, then destination. Promotion auto-queens.</div>
+    <div style="display:flex;gap:6px;padding:0 10px 8px;flex-wrap:wrap"><button class="fbt" onclick="copyFEN()" style="flex:1">Copy FEN</button><button class="fbt" onclick="copyPGN()" style="flex:1">Copy PGN</button><button class="fbt" onclick="importPGN()">Import</button></div>
+    <div id="moveList" style="padding:8px 12px;max-height:180px;overflow:auto;border-top:1px solid var(--line)"></div>
+    <div style="padding:7px 11px;border-top:1px solid var(--line);font-size:11px;color:var(--text2);display:flex;gap:8px;flex-wrap:wrap"><span onclick="takeback()" style="cursor:pointer;color:var(--accent)">Takeback</span><span onclick="drawOffer()" style="cursor:pointer">Draw</span><span onclick="resign()" style="cursor:pointer">Resign</span><span id="bestLine" style="margin-left:auto;color:#fff;font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span></div>
+    <div style="padding:6px 11px;font-size:11px;color:var(--text2)">Click piece → destination • <span id="hintText" style="color:var(--accent)"></span></div>
   </div>
   <div class="board-area">
     <div class="board-wrap"><div class="cg-wrap"><div id="board" class="cg-board"></div></div></div>
@@ -322,33 +344,109 @@ function addHistory(fen){
   div.innerHTML='<span class="num">'+idx+'.</span><span style="color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">'+fen.split(' ')[0].slice(0,24)+'</span><span style="margin-left:auto;color:var(--text2)">'+fen.split(' ')[1]+'</span>';
   list.appendChild(div); list.scrollTop=list.scrollHeight;
 }
+let redoStack=[]; let evalHistory=[0];
+function drawEvalGraph(){
+  const c=document.getElementById('evalGraph'); if(!c) return; const ctx=c.getContext('2d'); const W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#1e1e1e'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#769656'; ctx.lineWidth=2; ctx.beginPath();
+  for(let i=0;i<evalHistory.length;i++){
+    const v=Math.max(-400,Math.min(400,evalHistory[i])); const x=(i/(evalHistory.length-1||1))*W; const y=H/2 - (v/400)*(H/2-4);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  } ctx.stroke();
+  ctx.strokeStyle='#3a3938'; ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+}
+function pushEval(cp){ evalHistory.push(cp); if(evalHistory.length>80) evalHistory.shift(); drawEvalGraph(); }
+const _origUpdateEval=updateEval; updateEval=function(cp){ _origUpdateEval(cp); pushEval(cp); document.getElementById('evalDetail').textContent='Depth '+document.getElementById('depthRange').value+' • '+cp+'cp • RustClaw NNUE'; document.getElementById('shareFEN').textContent=boardFEN; document.getElementById('explorerFen').textContent=boardFEN.slice(0,24)+'…'; };
 function resetBoard(){
-  moveStackFens=[]; lastMove=null; boardFEN=START_FEN; history=[START_FEN];
-  document.getElementById('moveList').innerHTML='';
+  moveStackFens=[]; redoStack=[]; lastMove=null; boardFEN=START_FEN; history=[START_FEN]; evalHistory=[0]; drawEvalGraph();
+  document.getElementById('moveList').innerHTML=''; document.getElementById('moveListRight').textContent='Moves mirrored.'; clearArrow();
   if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'reset'}));
   render();
 }
 function undoMove(){
   if(moveStackFens.length){
-    boardFEN=moveStackFens.pop(); history.pop(); lastMove=null;
-    render();
-    if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'fen', fen:boardFEN}));
-  } else if(history.length>1){
-    history.pop(); boardFEN=history[history.length-1]; render();
-  }
+    redoStack.push(boardFEN); boardFEN=moveStackFens.pop(); history.pop(); lastMove=null;
+    render(); if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'fen', fen:boardFEN}));
+  } else if(history.length>1){ redoStack.push(boardFEN); history.pop(); boardFEN=history[history.length-1]; render(); }
+}
+function redoMove(){
+  if(redoStack.length){ moveStackFens.push(boardFEN); boardFEN=redoStack.pop(); history.push(boardFEN); render(); if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'fen', fen:boardFEN})); }
 }
 function flipBoard(){ flipped=!flipped; render(); }
-function requestEval(){ if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'eval'})); else updateEval(Math.floor(Math.random()*40-20)); }
+function requestEval(){ 
+  const d=document.getElementById('depthRange').value;
+  if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'eval'})); 
+  if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'hint', depth: parseInt(d)}));
+}
+function aiMove(){
+  const d=parseInt(document.getElementById('depthRange').value);
+  document.getElementById('bestLine').textContent='Thinking depth '+d+' 12T...';
+  if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'ai_move', depth:d}));
+  else { // offline fallback random
+    const b=fenToBoard(boardFEN); const moves=[]; for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(b[r][c]) moves.push([r,c]); if(moves.length) { const a=moves[Math.floor(Math.random()*moves.length)]; const nb=fenToBoard(boardFEN); nb[4][4]=nb[a[0]][a[1]]; } updateEval(Math.floor(Math.random()*100-50));
+  }
+}
+function hintMove(){
+  const d=parseInt(document.getElementById('depthRange').value);
+  if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'hint', depth:d}));
+  document.getElementById('hintText').textContent='thinking...';
+}
+function showHint(){ hintMove(); }
+function clearArrow(){ const a=document.getElementById('arrow'); if(a) a.style.display='none'; document.getElementById('hintText').textContent=''; }
+function drawArrow(from,to){
+  const boardEl=document.getElementById('board'); const box=boardEl.getBoundingClientRect();
+  const sqW=box.width/8, sqH=box.height/8;
+  const fc=from.charCodeAt(0)-97, fr=8-parseInt(from[1]);
+  const tc=to.charCodeAt(0)-97, tr=8-parseInt(to[1]);
+  const fx=flipped?7-fc:fc, fy=flipped?7-fr:fr, tx=flipped?7-tc:tc, ty=flipped?7-tr:tr;
+  const x1=fx*sqW+sqW/2, y1=fy*sqH+sqH/2, x2=tx*sqW+sqW/2, y2=ty*sqH+sqH/2;
+  const len=Math.hypot(x2-x1,y2-y1), ang=Math.atan2(y2-y1,x2-x1)*180/Math.PI;
+  const el=document.getElementById('arrow'); el.style.left=x1+'px'; el.style.top=(y1-4)+'px'; el.style.width=len+'px'; el.style.transform='rotate('+ang+'deg)'; el.style.display='block';
+}
+function copyFEN(){ navigator.clipboard.writeText(boardFEN); const e=document.getElementById('hintText'); e.textContent='FEN copied'; setTimeout(()=>e.textContent='',1500); }
+function copyPGN(){
+  let pgn='[FEN "'+START_FEN+'"]\n\n'; const list=document.getElementById('moveList'); let moves=[]; for(let i=0;i<list.children.length;i++) moves.push(list.children[i].textContent); pgn+=moves.join(' ');
+  navigator.clipboard.writeText(pgn); document.getElementById('hintText').textContent='PGN copied'; setTimeout(()=>document.getElementById('hintText').textContent='',1500);
+}
+function importPGN(){
+  const p=prompt('Paste PGN or FEN:'); if(!p) return;
+  if(p.includes('/')){ boardFEN=p.trim().split('\n').pop().trim(); moveStackFens.push(boardFEN); history.push(boardFEN); render(); if(ws&&ws.readyState===1) ws.send(JSON.stringify({cmd:'fen',fen:boardFEN})); }
+  else alert('Paste a FEN like rnbqkbnr/...');
+}
+function pasteFEN(){ importPGN(); }
+function takeback(){ undoMove(); }
+function drawOffer(){ alert('Draw offer — RustClaw says: good game!'); }
+function resign(){ alert('You resigned — RustClaw wins'); resetBoard(); }
+// depth slider
+document.getElementById('depthRange').addEventListener('input', e=>{ document.getElementById('depthVal').textContent=e.target.value; });
+// coords toggle
+document.getElementById('coordsToggle')?.addEventListener('change', e=>{ document.querySelectorAll('.coord').forEach(el=>el.style.display=e.target.checked?'block':'none'); });
+// enhance ws onmessage to handle hint/ai
+const _origConnectWS=connectWS; connectWS=function(){
+  const proto = location.protocol==='https:'?'wss:':'ws:';
+  try { ws = new WebSocket(proto + '//' + location.host + '/ws'); } catch(e){ ws=null; return; }
+  ws.onmessage = (e)=>{
+    try{
+      const m = JSON.parse(e.data);
+      if(m.type==='update'){ boardFEN=m.fen; if(m.eval!==undefined) updateEval(m.eval); addHistory(m.fen); render(); if(m.last) lastMove={from:{r:8-parseInt(m.last[3]),c:m.last.charCodeAt(0)-97},to:{r:8-parseInt(m.last[1]),c:m.last.charCodeAt(2)-97}}; if(document.getElementById('modeSel').value==='ai' && document.getElementById('autoAI').checked && m.turn && m.turn[0]==='b'){ setTimeout(aiMove,400); } }
+      if(m.type==='ai'){ boardFEN=m.fen; if(m.eval!==undefined) updateEval(m.eval); addHistory(m.fen); lastMove=m.ai?{from:{r:8-parseInt(m.ai[3]),c:m.ai.charCodeAt(0)-97},to:{r:8-parseInt(m.ai[1]),c:m.ai.charCodeAt(2)-97}}:null; render(); document.getElementById('bestLine').textContent='AI played '+m.ai+'  eval '+m.eval+'  nodes '+m.nodes; drawArrow(m.ai.slice(0,2),m.ai.slice(2,4)); }
+      if(m.type==='hint'){ document.getElementById('bestLine').textContent='Best '+m.best+'  '+m.score+'cp  PV '+ (m.pv||[]).join(' '); document.getElementById('pvLine').textContent='PV: '+ (m.pv||[]).join(' '); document.getElementById('nodesInfo').textContent=m.nodes+' nodes'; document.getElementById('hintText').textContent='Hint '+m.best; if(m.best) drawArrow(m.best.slice(0,2),m.best.slice(2,4)); }
+      if(m.type==='eval') updateEval(m.eval);
+    } catch{}
+  };
+  ws.onopen = ()=> console.log('WS connected to RustClaw NNUE by Vaibhav');
+  ws.onclose = ()=> setTimeout(connectWS, 2000);
+};
 document.getElementById('fenInput').addEventListener('keydown', (e)=>{
   if(e.key==='Enter'){
     const fen=e.target.value.trim();
     if(!fen) return;
-    moveStackFens.push(boardFEN);
+    moveStackFens.push(boardFEN); redoStack=[];
     boardFEN=fen; history.push(fen); render();
     if(ws && ws.readyState===1) ws.send(JSON.stringify({cmd:'fen', fen}));
   }
 });
-connectWS(); render();
+connectWS(); render(); drawEvalGraph();
 setInterval(()=>{ if(!ws || ws.readyState!==1) connectWS(); }, 3000);
 </script>
 </body>
